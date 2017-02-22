@@ -1,0 +1,6 @@
+numpy>=1.10.2
+scipy>=0.16.1
+scikit-image>=0.10.0
+matplotlib>=2.0.0
+click>=6.0
+seaborn>=0.7.0
