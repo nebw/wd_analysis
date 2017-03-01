@@ -21,7 +21,7 @@ def get_angles(track, window_size):
 
 def determine_threshold(cos_theta_smooth):
     vals = cos_theta_smooth[(1 - np.isnan(cos_theta_smooth)).astype(np.bool)]
-    return skimage.filters.threshold_otsu(vals)
+    return skimage.filters.threshold_yen(vals)
 
 
 def detect_waggles(track, window_size=51):

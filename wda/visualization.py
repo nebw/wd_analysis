@@ -20,7 +20,7 @@ def plot_track(track, Y=None):
     ax.set_ylabel('y')
     ax.set_zlabel('t')
 
-    fig.suptitle('Dance trajectory')
+    #fig.suptitle('Dance trajectory')
 
     return fig
 
@@ -38,7 +38,7 @@ def plot_features(cos_theta_smooth, detected_waggles, detected_waggles_median):
     axes[2].plot(detected_waggles_median)
     axes[2].set_title('Otsu thresholding (median-filtered)')
 
-    fig.suptitle('Waggle detection feature')
+    #fig.suptitle('Waggle detection feature')
 
     return fig
 
@@ -54,6 +54,23 @@ def plot_waggle(waggle, axes):
     theta = waggle['best_theta']
     theta_deg = rad_to_deg(theta)
 
+    theta_bins = waggle['theta_bins']
+
+    hist = waggle['smoothed_hist']
+    hist += np.min(hist)
+    hist /= np.max(hist)
+
+    below_zero = theta_bins < 0
+    above_zero = theta_bins >= 0
+    theta_bins = np.concatenate(
+        (theta_bins[above_zero],
+         theta_bins[below_zero] + 2 * np.pi)
+    )
+    hist = np.concatenate(
+        (hist[above_zero],
+         hist[below_zero])
+    )
+
     dy, dx = np.sin(theta), np.cos(theta)
 
     axes[0].scatter(*waggle['points'].T, c=plt.cm.viridis.colors[128])
@@ -65,7 +82,7 @@ def plot_waggle(waggle, axes):
                    color=plt.cm.viridis.colors[180])
     axes[0].axis('equal')
 
-    axes[1].plot(waggle['theta_bins'], waggle['smoothed_hist'])
+    axes[1].plot(theta_bins, hist)
     axes[1].set_title('Angle distribution')
 
 
@@ -75,7 +92,7 @@ def plot_waggles(waggles):
     for idx, waggle in enumerate(waggles):
         plot_waggle(waggle, axes[idx])
 
-    fig.suptitle('Individual waggle run decodings')
+    #fig.suptitle('Individual waggle run decodings')
 
     return fig
 
@@ -102,7 +119,7 @@ def plot_angle_distribution(waggles):
 
     # Use custom colors and opacity
     for r, bar in zip(radii, bars):
-        bar.set_facecolor(plt.cm.viridis_r(r / max_height))
+        bar.set_facecolor(plt.cm.inferno(r / max_height))
         bar.set_alpha(0.5)
 
     ax.set_rmax(max_height)
@@ -116,6 +133,6 @@ def plot_angle_distribution(waggles):
     ticks.add((theta_bins[np.argmax(median_thetas)] + 2 * np.pi) % (2 * np.pi))
     ax.set_xticks(list(ticks))
 
-    fig.suptitle('Dance decoding')
+    #fig.suptitle('Dance decoding')
 
     return fig
