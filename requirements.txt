@@ -4,3 +4,4 @@ scikit-image>=0.10.0
 matplotlib>=2.0.0
 click>=6.0
 seaborn>=0.7.0
+json_tricks>=3.8.0

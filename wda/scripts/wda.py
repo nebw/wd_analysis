@@ -1,7 +1,7 @@
 import numpy as np
 import click
+from json_tricks.np import dumps
 import os
-import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 
 from wda import analysis, io, visualization
@@ -13,8 +13,9 @@ from wda import analysis, io, visualization
               required=True, help='Path to track csv/json')
 def main(track):
     tracks = io.load_tracks(track)
-    fname = os.path.splitext(track)[0]
+    fname = os.path.splitext(os.path.split(track)[-1])[0]
 
+    results = []
     print('Number of tracks in file: {}'.format(len(tracks)))
     print()
     for track_idx, track in enumerate(tracks):
@@ -36,3 +37,10 @@ def main(track):
         visualization.plot_angle_distribution(waggles)
         pp.savefig(bbox_inches='tight')
         pp.close()
+
+        open('{}-track{}-waggles.json'.format(fname, track_idx), 'w').write(dumps(waggles))
+
+        results.append((track_idx, analysis.extract_most_likely_angle(waggles)))
+
+    np.savetxt('{}-results.csv'.format(fname), np.array(results), delimiter=",",
+               header='track_id,angle', fmt=['%d', '%s'])

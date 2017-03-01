@@ -4,7 +4,7 @@ from matplotlib.colors import ListedColormap
 from mpl_toolkits.mplot3d import Axes3D
 import seaborn as sns
 
-from wda.analysis import determine_threshold
+from wda.analysis import determine_threshold, rad_to_deg
 
 
 def plot_track(track, Y=None):
@@ -19,8 +19,6 @@ def plot_track(track, Y=None):
     ax.set_xlabel('x')
     ax.set_ylabel('y')
     ax.set_zlabel('t')
-
-    #fig.suptitle('Dance trajectory')
 
     return fig
 
@@ -38,16 +36,7 @@ def plot_features(cos_theta_smooth, detected_waggles, detected_waggles_median):
     axes[2].plot(detected_waggles_median)
     axes[2].set_title('Otsu thresholding (median-filtered)')
 
-    #fig.suptitle('Waggle detection feature')
-
     return fig
-
-
-def rad_to_deg(theta):
-    theta_deg = theta / np.pi * 180
-    if theta_deg < 0:
-        theta_deg = 360 + theta_deg
-    return theta_deg
 
 
 def plot_waggle(waggle, axes):
@@ -92,8 +81,6 @@ def plot_waggles(waggles):
     for idx, waggle in enumerate(waggles):
         plot_waggle(waggle, axes[idx])
 
-    #fig.suptitle('Individual waggle run decodings')
-
     return fig
 
 
@@ -132,7 +119,5 @@ def plot_angle_distribution(waggles):
     ticks = set(ax.get_xticks())
     ticks.add((theta_bins[np.argmax(median_thetas)] + 2 * np.pi) % (2 * np.pi))
     ax.set_xticks(list(ticks))
-
-    #fig.suptitle('Dance decoding')
 
     return fig

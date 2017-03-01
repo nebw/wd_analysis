@@ -78,3 +78,20 @@ def extract_waggles(track, detected_waggles_median):
         waggles.append(waggle_data)
 
     return waggles
+
+
+def rad_to_deg(theta):
+    theta_deg = theta / np.pi * 180
+    if theta_deg < 0:
+        theta_deg = 360 + theta_deg
+    return theta_deg
+
+
+def extract_most_likely_angle(waggles):
+    theta_bins = waggles[0]['theta_bins']
+    histograms = [w['smoothed_hist'] for w in waggles]
+
+    median_thetas = np.median(histograms, axis=0)
+    median_thetas /= np.max(median_thetas)
+
+    return theta_bins[np.argmax(median_thetas)]
