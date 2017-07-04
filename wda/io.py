@@ -5,12 +5,27 @@ import pandas as pd
 from wda import features
 
 
-def load_csv_tracks(path, sep=','):
-    data = pd.read_csv(path, sep=sep, header=None, names=('t', 'id', 'x', 'y', 'behaviour'))
+def is_float(obj):
+    try:
+        float(obj)
+        return True
+    except:
+        return False
+
+
+def load_csv_tracks(path, sep=None):
+    data = pd.read_csv(path, sep=sep, header=None,
+                       names=('t', 'id', 'x', 'y', 'behaviour'),
+                       skiprows=1, usecols=range(5), engine='python')
 
     tracks = []
     for track_id in data.id.unique():
-        tracks.append(data[data.id == track_id])
+        track = data[data.id == track_id]
+        # remove corrupt columns
+        track = track[track.iloc[:, 2].apply(is_float) & track.iloc[:, 3].apply(is_float)]
+        track[['x','y']] = track[['x','y']].apply(lambda c: c.astype(np.float64))
+
+        tracks.append(track)
 
     return tracks
 

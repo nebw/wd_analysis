@@ -21,7 +21,7 @@ def get_angles(track, window_size):
 
 def determine_threshold(cos_theta_smooth):
     vals = cos_theta_smooth[(1 - np.isnan(cos_theta_smooth)).astype(np.bool)]
-    return skimage.filters.threshold_yen(vals)
+    return skimage.filters.threshold_otsu(vals)
 
 
 def detect_waggles(track, window_size=51):
@@ -55,6 +55,9 @@ def extract_waggles(track, detected_waggles_median):
 
         points = track[(track.index >= start) & (track.index <= end)][['x', 'y']].as_matrix()
 
+        if len(points) == 0:
+            continue
+
         deltas = points[1:] - points[:-1]
         deltas_x_s = pd.Series(deltas[:, 0]).rolling(21, center=True).mean().dropna()
         deltas_y_s = pd.Series(deltas[:, 1]).rolling(21, center=True).mean().dropna()
@@ -70,6 +73,8 @@ def extract_waggles(track, detected_waggles_median):
 
         best_theta = theta_bins[np.argmax(smoothed_hist)]
 
+        waggle_data['start_time_in_video'] = track.iloc[start].t / 30
+        waggle_data['end_time_in_video'] = track.iloc[end].t / 30
         waggle_data['points'] = points
         waggle_data['theta_bins'] = theta_bins
         waggle_data['best_theta'] = best_theta

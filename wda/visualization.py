@@ -47,7 +47,7 @@ def plot_waggle(waggle, axes):
 
     hist = waggle['smoothed_hist']
     hist += np.min(hist)
-    hist /= np.max(hist)
+    hist /= np.max(hist + np.finfo(np.float32).eps)
 
     below_zero = theta_bins < 0
     above_zero = theta_bins >= 0
