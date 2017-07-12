@@ -1,68 +1,61 @@
-import itertools
-import numpy as np
 import click
-from json_tricks.np import dumps
+import itertools
+from pathos.multiprocessing import ProcessPool, cpu_count
+from tqdm import tqdm
+import numpy as np
 import os
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 
-from wda import analysis, io, visualization
+from wda import analysis, io
 
 
-def track_file(track):
-    tracks = io.load_tracks(track)
-    fname = os.path.splitext(os.path.split(track)[-1])[0]
-    subfolder = track.split(os.sep)[-2]
-
+def process_track(track, track_idx, fname, subfolder, verbose=False):
     results = []
-    print('Number of tracks in file: {}'.format(len(tracks)))
-    print()
-    print(track)
-    for track_idx, track in enumerate(tracks):
+    if verbose:
         print('Track {}'.format(track_idx + 1))
-        #pp = PdfPages('{}-track{}-figures.pdf'.format(fname, track_idx))
-        cos_theta_smooth, detected_waggles, detected_waggles_median = \
-            analysis.detect_waggles(track)
+    cos_theta_smooth, detected_waggles, detected_waggles_median = \
+        analysis.detect_waggles(track)
 
-        #visualization.plot_features(cos_theta_smooth, detected_waggles, detected_waggles_median)
-        #pp.savefig(bbox_inches='tight')
-
-        #visualization.plot_track(track.iloc[:-1], Y=detected_waggles_median.astype(np.int32))
-        #pp.savefig(bbox_inches='tight')
-
-        waggles = analysis.extract_waggles(track, detected_waggles_median)
+    waggles = analysis.extract_waggles(track, detected_waggles_median)
+    if verbose:
         print('Number of detected waggle runs: {}'.format(len(waggles)))
-        if len(waggles) == 0:
-            continue
-        #visualization.plot_waggles(waggles)
-        #pp.savefig(bbox_inches='tight')
+    if len(waggles) == 0:
+        return None
 
-        #visualization.plot_angle_distribution(waggles)
-        #pp.savefig(bbox_inches='tight')
-        #pp.close()
+    dance_start_time = track.t.iloc[0] / 30
+    dance_end_time = track.t.iloc[-1] / 30
+    most_likely_dance_angle = analysis.extract_most_likely_angle(waggles)
 
-        #open('{}-track{}-waggles.json'.format(fname, track_idx), 'w').write(dumps(waggles))
+    for waggle in waggles:
+        results.append((
+            fname,
+            subfolder,
+            track_idx,
+            len(waggle['points']),
+            waggle['is_len_outlier'],
+            waggle['best_theta'],
+            waggle['is_theta_outlier'],
+            waggle['direction'],
+            waggle['start_time_in_video'],
+            waggle['end_time_in_video'],
+            dance_start_time,
+            dance_end_time,
+            most_likely_dance_angle
 
-        median_len = np.median([len(w['points']) for w in waggles])
-        waggle_lens = [len(w['points']) for w in waggles]
-        print(waggle_lens)
-
-        start_time = track.t.iloc[0] / 30
-        end_time = track.t.iloc[-1] / 30
-
-        results.append((fname,
-                        subfolder,
-                        track_idx,
-                        start_time,
-                        end_time,
-                        analysis.extract_most_likely_angle(waggles),
-                        len(waggles),
-                        median_len))
+        ))
 
     return results
 
-    #np.savetxt('{}-results.csv'.format(fname), np.array(results), delimiter=",",
-    #           header='track_id,angle', fmt=['%d', '%s'])
+
+def get_tracks(path, verbose=False):
+    tracks = io.load_tracks(path)
+    fname = os.path.splitext(os.path.split(path)[-1])[0]
+    subfolder = path.split(os.sep)[-2]
+
+    loaded_tracks = []
+    for track_idx, track in enumerate(tracks):
+        loaded_tracks.append((track, track_idx, fname, subfolder))
+
+    return loaded_tracks
 
 
 @click.command()
@@ -73,6 +66,8 @@ def track_file(track):
                                         dir_okay=True, readable=True),
               required=False, help='Path to track csv/json directory')
 def main(track=None, path=None):
+    pool = ProcessPool(nodes=cpu_count())
+
     if track is not None:
         tracks = [track]
     else:
@@ -84,8 +79,17 @@ def main(track=None, path=None):
                 if file.endswith(".json") or file.endswith(".csv"):
                     tracks.append(os.path.join(root, file))
 
-    results = list(itertools.chain(*map(track_file, tracks)))
-    print(np.array(results))
+    loaded_tracks = tqdm(pool.imap(get_tracks, tracks), 'Loading data', total=len(tracks))
+    loaded_tracks = list(filter(lambda t: t is not None,
+                                itertools.chain(*loaded_tracks)))
+
+    results = tqdm(pool.uimap(lambda t: process_track(*t), loaded_tracks),
+                   'Processing tracks', total=len(loaded_tracks))
+    results = list(itertools.chain(*results))
+
+    header = 'fname,subfolder,track_idx,waggle_len,is_len_outlier,waggle_theta,is_theta_outlier' +\
+        'waggle_direction,waggle_start_time,waggle_end_time,dance_start_time,dance_end_time' +\
+        'dance_angle'
+    fmt = ['%s'] * len(header)
     np.savetxt('results.csv', np.array(results), delimiter=",", comments='',
-               header='fname,subfolder,track_id,start_time,end_time,angle,num_waggles,median_waggle_len',
-               fmt=['%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s'])
+               header=header, fmt=fmt)

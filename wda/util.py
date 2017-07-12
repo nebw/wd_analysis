@@ -1,4 +1,5 @@
 from datetime import datetime
+import time
 import os
 import numpy as np
 import pandas as pd
@@ -75,7 +76,7 @@ def get_suncalc(base_path):
 
 def parse_feeder(base_path, feeder_idx, min_waggles=5, constant_correction=2.):
     feeder_str = 'feeder{}.csv'.format(feeder_idx)
-    result_path = os.path.join(base_path, 'data', 'results', feeder_str)
+    result_path = os.path.join(base_path, 'results', feeder_str)
     feeder_pos = Feeder(feeder_idx).position
 
     data = pd.read_csv(result_path)
@@ -109,3 +110,13 @@ def get_dance_vectors(feeder_data, distances):
         np.cos(feeder_data.relative_angle),
         np.sin(feeder_data.relative_angle)),
         -1) * np.array(distances)[:, None]
+
+
+def timing(f):
+    def wrap(*args):
+        time1 = time.time()
+        ret = f(*args)
+        time2 = time.time()
+        print('%s function took %0.3f ms' % (f.__name__, (time2-time1)*1000.0))
+        return ret
+    return wrap
