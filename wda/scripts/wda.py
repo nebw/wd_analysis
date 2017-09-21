@@ -1,6 +1,7 @@
 import click
 import itertools
-from pathos.multiprocessing import ProcessPool, cpu_count
+from pathos.multiprocessing import cpu_count
+from pathos.threading import ThreadPool
 from tqdm import tqdm
 import numpy as np
 import os
@@ -18,6 +19,7 @@ def process_track(track, track_idx, fname, subfolder, verbose=False):
     waggles = analysis.extract_waggles(track, detected_waggles_median)
     if verbose:
         print('Number of detected waggle runs: {}'.format(len(waggles)))
+
     if len(waggles) == 0:
         return None
 
@@ -34,9 +36,10 @@ def process_track(track, track_idx, fname, subfolder, verbose=False):
             waggle['is_len_outlier'],
             waggle['best_theta'],
             waggle['is_theta_outlier'],
+            waggle['distance_pixel'],
             waggle['direction'],
-            waggle['start_time_in_video'],
-            waggle['end_time_in_video'],
+            waggle['start_time_in_video'][0],
+            waggle['end_time_in_video'][0],
             dance_start_time,
             dance_end_time,
             most_likely_dance_angle
@@ -65,8 +68,11 @@ def get_tracks(path, verbose=False):
 @click.option('--path', type=click.Path(exists=True, file_okay=False,
                                         dir_okay=True, readable=True),
               required=False, help='Path to track csv/json directory')
-def main(track=None, path=None):
-    pool = ProcessPool(nodes=cpu_count())
+@click.option('--output', type=click.Path(exists=False, file_okay=False,
+                                          writable=True, readable=True),
+              required=False, help='Path to result csv')
+def main(track=None, path=None, output=None):
+    pool = ThreadPool(nodes=cpu_count())
 
     if track is not None:
         tracks = [track]
@@ -85,11 +91,12 @@ def main(track=None, path=None):
 
     results = tqdm(pool.uimap(lambda t: process_track(*t), loaded_tracks),
                    'Processing tracks', total=len(loaded_tracks))
-    results = list(itertools.chain(*results))
+    results = filter(lambda t: t is not None, results)
+    results = np.array(list(itertools.chain(*results)))
 
-    header = 'fname,subfolder,track_idx,waggle_len,is_len_outlier,waggle_theta,is_theta_outlier' +\
-        'waggle_direction,waggle_start_time,waggle_end_time,dance_start_time,dance_end_time' +\
+    header = 'fname,subfolder,track_idx,waggle_len,is_len_outlier,waggle_theta,is_theta_outlier,distance_pixel,' +\
+        'waggle_direction,waggle_start_time,waggle_end_time,dance_start_time,dance_end_time,' +\
         'dance_angle'
-    fmt = ['%s'] * len(header)
-    np.savetxt('results.csv', np.array(results), delimiter=",", comments='',
+    fmt = ['%s'] * results.shape[1]
+    np.savetxt(output, results, delimiter=",", comments='',
                header=header, fmt=fmt)

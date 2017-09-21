@@ -1,6 +1,6 @@
 import itertools
 import numpy as np
-from pathos.threading import ThreadPool
+from pathos.multiprocessing import ProcessPool, cpu_count
 import pandas as pd
 import skimage
 import skimage.filters
@@ -97,8 +97,11 @@ def _regress(points, start_idx, end_idx):
 def regress(points):
     df = []
 
-    start_indices = range(0, points.shape[0] // 2 - 5)
-    end_indices = range(points.shape[0] // 2 + 5, points.shape[0])
+    # speed up computation for long waggles
+    step = int(np.ceil(len(points) / 100))
+
+    start_indices = range(0, points.shape[0] // 2 - 5, step)
+    end_indices = range(points.shape[0] // 2 + 5, points.shape[0], step)
     indices = list(itertools.product(start_indices, end_indices))
 
     df = [_regress(points, s, e) for s, e in indices]
@@ -134,28 +137,33 @@ def detect_waggle_subsequence(waggle):
 
 
 def detect_outliers(waggles):
-    waggle_lens = [len(w['points']) for w in waggles]
-    waggle_thetas = [w['best_theta'] for w in waggles]
+    if len(waggles) > 2:
+        waggle_lens = [len(w['points']) for w in waggles]
+        waggle_thetas = [w['best_theta'] for w in waggles]
 
-    len_outlier_model = EllipticEnvelope().fit(np.array(waggle_lens)[:, None])
-    len_outliers = len_outlier_model.predict(np.array(waggle_lens)[:, None]) < 1
+        len_outlier_model = EllipticEnvelope().fit(np.array(waggle_lens)[:, None])
+        len_outliers = len_outlier_model.predict(np.array(waggle_lens)[:, None]) < 1
 
-    for waggle, is_len_outlier in zip(waggles, len_outliers):
-        waggle['is_len_outlier'] = is_len_outlier
+        for waggle, is_len_outlier in zip(waggles, len_outliers):
+            waggle['is_len_outlier'] = is_len_outlier
 
-    ransac_results = ransac_thetas(
-        waggle_thetas, 3, len(waggle_thetas) * 5,
-        np.pi / 4, int(len(waggle_thetas) * .7))
+        ransac_results = ransac_thetas(
+            waggle_thetas, 3, len(waggle_thetas) * 5,
+            np.pi / 4, int(len(waggle_thetas) * .7))
 
-    if ransac_results is None:
-        outlier_idxs = set()
+        if ransac_results is None:
+            outlier_idxs = set()
+        else:
+            ransac_theta, inlier_idxs, outlier_idxs = ransac_results
+
+        outlier_idxs = outlier_idxs if outlier_idxs is not None else set()
+
+        for idx, waggle in enumerate(waggles):
+            waggle['is_theta_outlier'] = idx in outlier_idxs
     else:
-        ransac_theta, inlier_idxs, outlier_idxs = ransac_results
-
-    outlier_idxs = outlier_idxs if outlier_idxs is not None else set()
-
-    for idx, waggle in enumerate(waggles):
-        waggle['is_theta_outlier'] = idx in outlier_idxs
+        for idx, waggle in enumerate(waggles):
+            waggle['is_len_outlier'] = False
+            waggle['is_theta_outlier'] = False
 
     return waggles
 
@@ -203,6 +211,7 @@ def _extract_waggle(track, start, end, debug=False):
     waggle_data = detect_waggle_subsequence(waggle_data)
     waggle_data = extract_waggle_angle(waggle_data)
     waggle_data = detect_direction(waggle_data)
+    waggle_data['distance_pixel'] = np.sqrt(np.sum((np.array(points[-1]) - np.array(points[0])) ** 2))
 
     if debug:
         points = waggle_data['points']
@@ -232,11 +241,11 @@ def extract_waggles(track, detected_waggles_median, debug=False):
     if debug:
         waggles = [_extract_waggle(track, start, end, debug=True) for start, end in intervals]
     else:
-        pool = ThreadPool(nodes=len(intervals))
         waggles = pool.uimap(lambda i: _extract_waggle(track, i[0], i[1]), intervals)
     waggles = list(filter(lambda t: t is not None, waggles))
 
-    waggles = detect_outliers(waggles)
+    if len(waggles) > 0:
+        waggles = detect_outliers(waggles)
 
     return waggles
 
@@ -256,3 +265,6 @@ def extract_most_likely_angle(waggles):
     median_thetas /= np.max(median_thetas)
 
     return theta_bins[np.argmax(median_thetas)]
+
+
+pool = ProcessPool(nodes=cpu_count())
